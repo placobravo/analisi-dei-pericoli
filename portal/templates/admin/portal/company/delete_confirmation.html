@@ -1,0 +1,26 @@
+{% extends "admin/delete_confirmation.html" %}
+{% load admin_urls %}
+
+{% block delete_confirm %}
+  <p>L’eliminazione è definitiva. Saranno rimossi <strong>{{ object }}</strong> e tutti i dati delle sue valutazioni.</p>
+  {% include "admin/includes/object_delete_summary.html" %}
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="post" value="yes">
+    {% if is_popup %}<input type="hidden" name="{{ is_popup_var }}" value="1">{% endif %}
+    {% if to_field %}<input type="hidden" name="{{ to_field_var }}" value="{{ to_field }}">{% endif %}
+    {% if linked_accounts %}
+      <p>Utenti collegati: {{ linked_accounts }}. Gli account conservati saranno scollegati dall’azienda.</p>
+      {% if removable_accounts %}
+        <p><label><input type="checkbox" name="delete_accounts" value="yes"> Elimina anche gli account utente collegati ({{ removable_accounts }})</label></p>
+      {% endif %}
+      {% if linked_accounts > removable_accounts %}
+        <p>Gli account di staff e amministrazione saranno scollegati.</p>
+      {% endif %}
+    {% endif %}
+    <div>
+      <input type="submit" value="Elimina azienda e dati">
+      <a href="{% url opts|admin_urlname:'change' object.pk|admin_urlquote %}" class="button cancel-link">Annulla</a>
+    </div>
+  </form>
+{% endblock %}

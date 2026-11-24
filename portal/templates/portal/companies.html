@@ -1,0 +1,15 @@
+{% extends 'portal/base.html' %}
+{% block title %}Aziende · Analisi dei pericoli{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <h1>Aziende</h1>
+  {% if perms.portal.add_company %}<a class="button primary" href="{% url 'company_create' %}">Nuova azienda</a>{% endif %}
+</div>
+<ul class="panel item-list" aria-label="Aziende clienti">
+  {% for company in companies %}
+    <li><a href="{% url 'company' company.pk %}">{{ company.name }}<span aria-hidden="true">→</span></a></li>
+  {% empty %}
+    <li class="empty">Non ci sono ancora aziende.</li>
+  {% endfor %}
+</ul>
+{% endblock %}

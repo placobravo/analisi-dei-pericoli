@@ -1,0 +1,49 @@
+{% load static %}<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Analisi dei pericoli{% endblock %}</title>
+  <script src="{% static 'portal/appearance.js' %}"></script>
+  <link rel="stylesheet" href="{% static 'portal/portal.css' %}">
+  {% block scripts %}{% endblock %}
+</head>
+<body>
+  <a class="skip" href="#contenuto">Vai al contenuto</a>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="{% url 'home' %}">
+        <img src="{% static 'portal/linneus-logo.svg' %}" width="175" height="79" alt="Linneus consulting services">
+        <span class="brand-title">Analisi dei pericoli</span>
+      </a>
+      {% if user.is_authenticated %}
+        <nav aria-label="Navigazione principale">
+          {% if perms.portal.view_assessment %}<a href="{% url 'home' %}"{% if request.resolver_match.url_name == 'home' %} aria-current="page"{% endif %}>Aziende</a>{% endif %}
+          {% if perms.portal.change_catalogversion %}<a href="{% url 'catalog' %}"{% if request.resolver_match.url_name == 'catalog' %} aria-current="page"{% endif %}>Catalogo</a>{% endif %}
+          {% if user.is_superuser %}<a href="{% url 'admin:index' %}">Amministrazione</a>{% endif %}
+        </nav>
+      {% endif %}
+      <div class="header-tools">
+        <button class="theme-toggle" type="button" role="switch" aria-label="Tema scuro" aria-checked="false" data-theme-toggle hidden>
+          <span class="theme-toggle-track" aria-hidden="true"></span>
+          Scuro
+        </button>
+        {% if user.is_authenticated %}
+          <details class="account">
+            <summary><span class="account-email">{{ user.email }}</span><span class="account-label">Account</span></summary>
+            <div class="account-menu">
+              <span class="account-label account-identity">{{ user.email }}</span>
+              <a href="{% url 'password_change' %}">Cambia password</a>
+              <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="link" type="submit">Esci</button></form>
+            </div>
+          </details>
+        {% endif %}
+      </div>
+    </div>
+  </header>
+  <main id="contenuto" class="page {% block page_class %}{% endblock %}">
+    {% for message in messages %}<p class="notice {{ message.tags }}" role="status">{{ message }}</p>{% endfor %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

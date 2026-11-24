@@ -1,0 +1,12 @@
+**
+!requirements.txt
+!manage.py
+!config/
+!config/**
+!portal/
+!portal/**
+**/__pycache__/
+**/*.py[cod]
+**/.env
+**/.env.*
+**/*.xlsx

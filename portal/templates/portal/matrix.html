@@ -1,0 +1,53 @@
+{% load l10n %}
+<section class="panel matrix" data-matrix data-metric="r" id="matrice">
+  <div class="matrix-heading">
+    <div>
+      <h2>{% if is_draft %}Matrice salvata{% else %}Matrice dei rischi{% endif %}</h2>
+      <p class="row-meta">Catalogo v{{ revision.catalog_version.number }} · {{ rows|length }} voci · {{ columns|length }} pericoli</p>
+    </div>
+    <button type="button" class="button" data-fullscreen hidden>Schermo intero</button>
+  </div>
+  <div class="matrix-toolbar actions" data-controls hidden>
+    <div class="matrix-control"><label for="matrix-value">Valore</label><select id="matrix-value" data-metric-select><option value="r">Rischio (R)</option><option value="p">Probabilità (P)</option></select></div>
+    <div class="matrix-control"><label for="matrix-kind">Tipo</label><select id="matrix-kind" data-kind><option value="">Tutti</option>{% for value, label in hazard_kinds %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
+    <label class="checkbox"><input type="checkbox" data-positive> Solo colonne R &gt; 0</label>
+    <div class="matrix-control"><label for="matrix-orientation">Intestazioni</label><select id="matrix-orientation" data-orientation><option value="horizontal">Orizzontali</option><option value="vertical">Verticali</option></select></div>
+    <div class="matrix-control zoom"><label for="matrix-zoom">Zoom</label><input type="range" id="matrix-zoom" min="65" max="140" step="5" value="100" data-zoom><output for="matrix-zoom" data-zoom-label>100%</output></div>
+  </div>
+  <p class="empty" data-no-columns hidden>Nessuna colonna corrisponde ai filtri.</p>
+  <div class="matrix-viewport" data-viewport tabindex="0" aria-label="Matrice scorrevole">
+    <table class="risk-table" data-table aria-label="Matrice dei rischi">
+      <thead>
+        <tr>
+          <th scope="col" class="row-heading">Voce</th>
+          {% for hazard, gravity, positive in columns %}
+            <th scope="col" data-col="{{ hazard.pk|unlocalize }}" data-kind="{{ hazard.kind }}" data-positive="{% if positive %}1{% else %}0{% endif %}">
+              <span class="hazard-name">{{ hazard.name }}</span>
+              <span class="hazard-meta">{{ hazard.kind }} · G {{ gravity }}</span>
+            </th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row, cells in matrix %}
+          <tr>
+            <th scope="row" class="row-heading">
+              <span{% if row.intended_use %} title="{{ row.intended_use }}"{% endif %}>
+                {% if row.label %}<small>{{ row.category.name }}</small>{{ row.label }}{% else %}{{ row.category.name }}{% endif %}
+              </span>
+            </th>
+            {% for cell in cells %}
+              <td class="numeric" data-col="{{ cell.column|unlocalize }}"{% if cell.band %} data-band="{{ cell.band }}"{% endif %}>
+                <span data-risk{% if cell.band_label %} aria-label="{{ cell.r }}, fascia {{ cell.band_label }}" title="Fascia {{ cell.band_label|lower }}"{% endif %}>{{ cell.r }}</span>
+                <span data-probability hidden>{{ cell.p }}</span>
+              </td>
+            {% endfor %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="legend" data-legend aria-label="Fasce di rischio">
+    <span data-band="low">Bassa 1–2</span><span data-band="medium">Media 3–7</span><span data-band="high">Alta &gt; 7</span>
+  </div>
+</section>

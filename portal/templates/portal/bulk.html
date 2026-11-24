@@ -1,0 +1,26 @@
+{% extends 'portal/base.html' %}
+{% load l10n %}
+{% block title %}Conferma modifica · Analisi dei pericoli{% endblock %}
+{% block page_class %}page-narrow{% endblock %}
+{% block content %}
+<section class="panel form-panel">
+  <h1>{% if form_data.action == 'zero' %}Imposta a 0{% else %}Svuota{% endif %}</h1>
+  <p>Valutazione <strong>{{ revision.assessment.title }}</strong> · Bozza {{ revision.number }}</p>
+  <p>
+    {% if form_data.action == 'zero' %}Verranno impostate a 0 solo le probabilità vuote{% else %}Verranno cancellate tutte le probabilità{% endif %}
+    {% if form_data.scope == 'all' %}
+      <strong>dell’intera bozza</strong>.
+    {% else %}
+      per la voce <strong>{{ row.category.name }}{% if row.label %} / {{ row.label }}{% endif %}</strong>.
+    {% endif %}
+  </p>
+  <form method="post" class="actions">
+    {% csrf_token %}
+    <input type="hidden" name="version" value="{{ form_data.version|unlocalize }}">
+    <input type="hidden" name="scope" value="{{ form_data.scope }}">
+    <input type="hidden" name="action" value="{{ form_data.action }}">
+    <button type="submit" class="button {% if form_data.action == 'clear' %}danger{% else %}warning{% endif %}" name="conferma" value="1">Conferma</button>
+    <a href="{{ return_url }}">Annulla</a>
+  </form>
+</section>
+{% endblock %}

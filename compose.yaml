@@ -1,0 +1,36 @@
+services:
+  db:
+    image: docker.io/library/postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${PORTALE_DB_NAME:-pericoli}
+      POSTGRES_USER: ${PORTALE_DB_USER:-pericoli}
+      POSTGRES_PASSWORD: ${PORTALE_DB_PASSWORD:?Imposta PORTALE_DB_PASSWORD in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", 'pg_isready -h 127.0.0.1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  web:
+    build: .
+    image: ${PORTALE_IMAGE:-localhost/analisi-dei-pericoli:local}
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORTALE_DB_HOST: db
+      PORTALE_DB_PORT: "5432"
+      PORTALE_DB_NAME: ${PORTALE_DB_NAME:-pericoli}
+      PORTALE_DB_USER: ${PORTALE_DB_USER:-pericoli}
+      PORTALE_DB_PASSWORD: ${PORTALE_DB_PASSWORD:?Imposta PORTALE_DB_PASSWORD in .env}
+      PORTALE_DEBUG: "${PORTALE_DEBUG:-0}"
+      PORTALE_SECRET_KEY: "${PORTALE_SECRET_KEY:-}"
+      PORTALE_ALLOWED_HOSTS: "${PORTALE_ALLOWED_HOSTS:-localhost,127.0.0.1,[::1]}"
+      PORTALE_TRUST_PROXY_HTTPS: "${PORTALE_TRUST_PROXY_HTTPS:-0}"
+    ports:
+      - "127.0.0.1:${PORTALE_WEB_PORT:-8080}:8000"
+
+volumes:
+  postgres-data:

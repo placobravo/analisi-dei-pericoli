@@ -1,0 +1,25 @@
+{% extends 'portal/base.html' %}
+{% block title %}{{ company.name }} · Analisi dei pericoli{% endblock %}
+{% block content %}
+{% if operator %}<a class="back" href="{% url 'home' %}">← Aziende</a>{% endif %}
+<div class="page-heading">
+  <div><p class="eyebrow">Azienda</p><h1>{{ company.name }}</h1></div>
+  {% if operator and perms.portal.add_assessment %}
+    <a class="button primary" href="{% url 'assessment_create' company.pk %}">Nuova valutazione</a>
+  {% endif %}
+</div>
+<h2>Valutazioni</h2>
+<ul class="panel item-list">
+  {% for assessment in assessments %}
+    <li><a href="{% url 'assessment' assessment.pk %}">
+      <span>{{ assessment.title }}</span>
+      {% if assessment.current_revision %}
+        <span class="row-meta">Revisione {{ assessment.current_revision.number }} pubblicata il {{ assessment.current_revision.published_at|date:'d/m/Y' }}</span>
+      {% else %}<span class="tag draft">Bozza</span>{% endif %}
+      <span aria-hidden="true">→</span>
+    </a></li>
+  {% empty %}
+    <li class="empty">{% if operator %}Non ci sono ancora valutazioni.{% else %}Non ci sono ancora valutazioni pubblicate.{% endif %}</li>
+  {% endfor %}
+</ul>
+{% endblock %}

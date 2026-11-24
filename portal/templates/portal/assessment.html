@@ -1,0 +1,103 @@
+{% extends 'portal/base.html' %}
+{% load static l10n %}
+{% block title %}{{ assessment.title }} · Analisi dei pericoli{% endblock %}
+{% block scripts %}<script src="{% static 'portal/matrix.js' %}" defer></script>{% endblock %}
+{% block content %}
+{% if operator %}
+  <a class="back" href="{% url 'company' assessment.company_id %}">← {{ assessment.company.name }}</a>
+{% else %}
+  <a class="back" href="{% url 'home' %}">← Valutazioni di {{ assessment.company.name }}</a>
+{% endif %}
+<div class="page-heading">
+  <div>
+    <div class="revision-meta">
+      {% if is_draft %}<span class="tag draft">Bozza</span>
+      {% elif operator and revision.pk != assessment.current_revision_id %}<span class="tag">Storico</span>
+      {% else %}<span class="tag published">Pubblicata</span>{% endif %}
+      <span>Revisione {{ revision.number }}{% if revision.published_at %} · {{ revision.published_at|date:'d/m/Y H:i' }}{% endif %}</span>
+    </div>
+    <h1>{{ assessment.title }}</h1>
+  </div>
+  {% if operator %}
+    <div class="actions">
+      {% if editable %}
+        <a class="button" href="{% url 'revision_discard' assessment.pk revision.pk %}">Annulla bozza</a>
+      {% endif %}
+      {% if is_draft and perms.portal.publish_assessment %}
+        <form method="post" action="{% url 'revision_publish' assessment.pk revision.pk %}">
+          {% csrf_token %}
+          <input type="hidden" name="version" value="{{ revision.edit_version|unlocalize }}">
+          <button type="submit" class="button primary">Pubblica revisione</button>
+        </form>
+      {% elif revision.pk == assessment.current_revision_id and perms.portal.revise_assessment %}
+        <form method="post" action="{% url 'revision_create' assessment.pk revision.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="button primary">Modifica la valutazione</button>
+        </form>
+      {% endif %}
+    </div>
+  {% endif %}
+</div>
+{% if operator %}
+  <details class="panel history">
+    <summary>Revisioni della valutazione</summary>
+    <ul>
+      {% for item in history %}
+        <li>
+          {% if item.pk == revision.pk %}<strong>Revisione {{ item.number }}</strong>
+          {% else %}<a href="{% url 'revision' assessment.pk item.pk %}">Revisione {{ item.number }}</a>{% endif %}
+          <span class="row-meta">· {% if item.published_at %}Pubblicata il {{ item.published_at|date:'d/m/Y H:i' }}{% else %}Bozza{% endif %}</span>
+        </li>
+      {% endfor %}
+    </ul>
+  </details>
+{% endif %}
+{% if editable %}
+  <details class="panel editor" id="compilazione" open>
+    <summary>Compila le probabilità</summary>
+    {% if selected %}
+      <form class="entry-picker actions" data-entry-picker method="get" action="{% url 'revision' assessment.pk revision.pk %}#compilazione">
+        <label for="voce">Voce del catalogo</label>
+        <select name="voce" id="voce">
+          {% for row in rows %}
+            <option value="{{ row.pk|unlocalize }}"{% if row.pk == selected.pk %} selected{% endif %}>{{ row.category.name }}{% if row.label %} / {{ row.label }}{% endif %}</option>
+          {% endfor %}
+        </select>
+        <noscript><button type="submit" class="button">Mostra</button></noscript>
+      </form>
+      <p class="selected-entry"><strong>{{ selected.category.name }}{% if selected.label %} / {{ selected.label }}{% endif %}</strong>{% if selected.intended_use %}<span class="row-meta"> · {{ selected.intended_use }}</span>{% endif %}</p>
+      <form data-probability-form method="post" action="{% url 'probability_save' assessment.pk revision.pk selected.pk %}">
+        {% csrf_token %}
+        {{ form.version }}
+        {{ form.version.errors }}
+        <div class="inputs-table" tabindex="0" aria-label="Probabilità della voce selezionata">
+          <table>
+            <thead><tr><th scope="col">Pericolo</th><th scope="col">Gravità</th><th scope="col">Probabilità</th></tr></thead>
+            <tbody>
+              {% for hazard, gravity, field in probability_fields %}
+                <tr>
+                  <th scope="row">{{ field.label_tag }} <span class="row-meta">{{ hazard.get_kind_display }}</span></th>
+                  <td class="numeric">{{ gravity }}</td>
+                  <td>{{ field }}{{ field.errors }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <button type="submit" class="button primary" data-save-probabilities>Salva probabilità</button>
+      </form>
+      <form class="bulk actions" method="post" action="{% url 'probability_bulk' assessment.pk revision.pk selected.pk %}">
+        {% csrf_token %}
+        <input type="hidden" name="version" value="{{ revision.edit_version|unlocalize }}">
+        <label for="scope">Applica a</label>
+        <select name="scope" id="scope"><option value="row">Voce selezionata</option><option value="all">Intera bozza</option></select>
+        <button type="submit" class="button warning" name="action" value="zero">Imposta a 0</button>
+        <button type="submit" class="button danger" name="action" value="clear">Svuota</button>
+      </form>
+    {% else %}
+      <p>Il catalogo non contiene voci da compilare.</p>
+    {% endif %}
+  </details>
+{% endif %}
+{% include 'portal/matrix.html' %}
+{% endblock %}

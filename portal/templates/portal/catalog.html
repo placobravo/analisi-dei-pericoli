@@ -1,0 +1,108 @@
+{% extends 'portal/base.html' %}
+{% load static l10n %}
+{% block title %}Catalogo · Analisi dei pericoli{% endblock %}
+{% block scripts %}<script src="{% static 'portal/catalog.js' %}" defer></script>{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div>
+    <h1>Catalogo comune</h1>
+    {% if versions %}
+      <form class="actions catalog-version-picker" method="get" action="{% url 'catalog' %}" data-catalog-version-picker>
+        <label for="versione-catalogo">Versione del catalogo</label>
+        <select id="versione-catalogo" name="versione">
+          {% for item in versions %}
+            <option value="{{ item.number|unlocalize }}"{% if item.pk == version.pk %} selected{% endif %}>
+              Versione {{ item.number }} · {% if item.pk == catalog.draft_id %}Bozza{% elif item.pk == catalog.current_id %}In uso{% else %}Storico{% endif %}
+            </option>
+          {% endfor %}
+        </select>
+        <noscript><button type="submit" class="button">Mostra</button></noscript>
+      </form>
+    {% endif %}
+  </div>
+  {% if editing_draft %}
+    <div class="actions">
+      <a class="button" href="{% url 'catalog_discard' version.pk %}">Annulla bozza</a>
+      <form method="post" action="{% url 'catalog_publish' version.pk %}">
+        {% csrf_token %}
+        <input type="hidden" name="version" value="{{ version.edit_version|unlocalize }}">
+        <button class="button primary" type="submit">Aggiorna catalogo</button>
+      </form>
+    </div>
+  {% elif version.pk == catalog.current_id and catalog.current and not catalog.draft %}
+    <form method="post" action="{% url 'catalog_start' %}">
+      {% csrf_token %}
+      <button class="button primary" type="submit">Modifica il catalogo</button>
+    </form>
+  {% endif %}
+</div>
+{% if version %}
+  {% if editing_draft %}
+    <p>Le nuove valutazioni usano il catalogo v{{ catalog.current.number }} fino alla pubblicazione della bozza.</p>
+    <div class="actions catalog-actions">
+      <a class="button" href="{% url 'catalog_category_create' version.pk %}">Nuova categoria</a>
+      <a class="button" href="{% url 'catalog_row_create' version.pk %}">Nuova sottocategoria</a>
+      <a class="button" href="{% url 'catalog_hazard_create' version.pk %}">Nuovo pericolo</a>
+    </div>
+  {% endif %}
+  <details class="panel catalog-panel" open>
+    <summary>Categorie &amp; Sottocategorie</summary>
+    <ul class="item-list">
+      {% for category in categories %}
+        {% with rows=category.catalog_rows %}
+          <li>
+            {% if editing_draft %}
+              <a class="catalog-category-link" href="{% url 'catalog_category' version.pk category.pk %}">
+            {% else %}
+              <span class="item">
+            {% endif %}
+                <span class="catalog-row-label">
+                  <strong>{{ category.name }}</strong>{% if rows and not rows.0.label %} <span class="row-meta">· Voce generale</span>{% endif %}
+                </span>
+            {% if editing_draft %}
+                <span aria-hidden="true">→</span>
+              </a>
+            {% else %}
+              </span>
+            {% endif %}
+            {% if rows.0.label or rows|length > 1 %}
+              <ul class="item-list catalog-subcategories">
+                {% for row in rows %}
+                  {% if row.label %}
+                    <li>
+                      {% if editing_draft %}
+                        <a href="{% url 'catalog_row' version.pk row.pk %}">
+                          <span class="catalog-row-label">{{ row.label }}</span>
+                          <span aria-hidden="true">→</span>
+                        </a>
+                      {% else %}
+                        <span class="item">{{ row.label }}</span>
+                      {% endif %}
+                    </li>
+                  {% endif %}
+                {% endfor %}
+              </ul>
+            {% endif %}
+          </li>
+        {% endwith %}
+      {% endfor %}
+    </ul>
+  </details>
+  <details class="panel catalog-panel" id="pericoli"{% if editing_draft %} open{% endif %}>
+    <summary>Pericoli e gravità · {{ hazards|length }}</summary>
+    <table class="hazard-table">
+      <thead><tr><th scope="col">Pericolo</th><th scope="col">Tipo</th><th scope="col">Gravità</th>{% if editing_draft %}<th scope="col">Azioni</th>{% endif %}</tr></thead>
+      <tbody>
+        {% for hazard in hazards %}
+          <tr>
+            <td>{{ hazard.name }}</td><td>{{ hazard.get_kind_display }}</td><td>{{ hazard.severity|floatformat:"-6" }}</td>
+            {% if editing_draft %}<td><a href="{% url 'catalog_hazard' version.pk hazard.pk %}" aria-label="Modifica gravità di {{ hazard.name }}">Modifica gravità</a></td>{% endif %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </details>
+{% else %}
+  <p class="panel empty">Il catalogo iniziale non è ancora stato importato.</p>
+{% endif %}
+{% endblock %}
