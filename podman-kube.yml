@@ -1,0 +1,70 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: analisi-pericoli-kube-data
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: analisi-pericoli-kube
+spec:
+  restartPolicy: Always
+  volumes:
+    - name: postgres-data
+      persistentVolumeClaim:
+        claimName: analisi-pericoli-kube-data
+  containers:
+    - name: db
+      image: docker.io/library/postgres:17-alpine
+      env:
+        - name: POSTGRES_DB
+          value: pericoli
+        - name: POSTGRES_USER
+          value: pericoli
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: analisi-pericoli-kube-secrets
+              key: db-password
+      volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+      livenessProbe:
+        exec:
+          command: [pg_isready, -h, 127.0.0.1, -U, pericoli, -d, pericoli]
+        periodSeconds: 5
+        timeoutSeconds: 3
+        failureThreshold: 12
+    - name: web
+      image: localhost/analisi-dei-pericoli:kube
+      imagePullPolicy: Never
+      ports:
+        - containerPort: 8000
+          hostIP: 127.0.0.1
+          hostPort: 8080
+      env:
+        - name: PORTALE_DB_HOST
+          value: 127.0.0.1
+        - name: PORTALE_DB_PORT
+          value: "5432"
+        - name: PORTALE_DB_NAME
+          value: pericoli
+        - name: PORTALE_DB_USER
+          value: pericoli
+        - name: PORTALE_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: analisi-pericoli-kube-secrets
+              key: db-password
+        - name: PORTALE_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: analisi-pericoli-kube-secrets
+              key: django-key
+        - name: PORTALE_DEBUG
+          value: "1"

@@ -2,65 +2,64 @@
 
 Portale Django e PostgreSQL per compilare, pubblicare e consultare le valutazioni dei rischi aziendali.
 
-## Avvio con i container
+## Avvio con Podman Kube
 
-Servono Podman con un provider Compose oppure Docker con il plugin Compose. I comandi seguenti usano `podman compose`. Con Docker usa `docker compose`. Se manca il provider per Podman, puoi installarlo in un ambiente virtuale attivo con `python -m pip install podman-compose`.
+Il manifest `podman-kube.yml` avvia Django e PostgreSQL nello stesso pod con Podman rootless. Il portale ascolta su [127.0.0.1:8080](http://127.0.0.1:8080/) e usa il volume dedicato `analisi-pericoli-kube-data`.
 
-Copia la configurazione di esempio e imposta in `.env` una password locale per `PORTALE_DB_PASSWORD`. Poi costruisci l'immagine e applica le migrazioni.
-
-```sh
-cp -n .env.example .env
-# Imposta PORTALE_DB_PASSWORD in .env prima di proseguire.
-podman compose build web
-podman compose up -d --wait db
-podman compose run --rm web python manage.py migrate --noinput
-```
-
-Su un database nuovo puoi importare il catalogo in un secondo momento. Usa un file Excel esterno nel formato previsto dal comando `importa_catalogo` e montalo in sola lettura. Il comando pubblica la prima versione e rifiuta di sovrascrivere un catalogo esistente.
+Al primo avvio crea il Secret nel deposito locale di Podman. Conserva queste credenziali per i successivi avvii con lo stesso volume.
 
 ```sh
-podman compose run --rm \
-  -v "/percorso/catalogo.xlsx:/import/catalogo.xlsx:ro" \
-  web python manage.py importa_catalogo /import/catalogo.xlsx
-podman compose run --rm web python manage.py createsuperuser
+python3 - <<'PY' | podman kube play -
+import json
+import secrets
+print(json.dumps({
+    "apiVersion": "v1", "kind": "Secret",
+    "metadata": {"name": "analisi-pericoli-kube-secrets"},
+    "stringData": {"db-password": secrets.token_hex(32), "django-key": secrets.token_hex(48)},
+}))
+PY
 ```
 
-Avvia il portale con `podman compose up -d web` e apri [il portale in container](http://127.0.0.1:8080/). Per scegliere un'altra porta imposta `PORTALE_WEB_PORT` in `.env`. PostgreSQL è raggiungibile sulla rete Compose come `db:5432`. Il catalogo, gli utenti e le valutazioni risiedono nel volume `postgres-data` del progetto. `podman compose down` arresta lo stack e conserva il volume. Per eseguire i test con la configurazione locale usa `podman compose run --rm web python manage.py test --noinput`.
-
-### Rilascio sulla VM
-
-1. Assegna all'immagine verificata un tag di release. Trasferiscila con `podman save` e `podman load` oppure tramite un registro privato. Copia `compose.yaml` sulla VM e imposta `PORTALE_IMAGE` al riferimento esatto dell'immagine caricata.
-2. Prepara sulla VM un file `.env` con permessi di lettura limitati. Imposta `PORTALE_DEBUG=0`, una `PORTALE_SECRET_KEY` casuale e stabile, `PORTALE_ALLOWED_HOSTS` con il nome DNS e `PORTALE_DB_NAME`, `PORTALE_DB_USER`, `PORTALE_DB_PASSWORD` con i parametri del database dedicato.
-3. Configura il proxy HTTPS della VM verso `127.0.0.1:8080` preservando l'header `Host`. Se il proxy sostituisce ogni `X-Forwarded-Proto` ricevuto dal client con lo schema della connessione e controlli tutti gli accessi al backend, imposta `PORTALE_TRUST_PROXY_HTTPS=1`. Questo permette a Django di riconoscere le richieste HTTPS.
-4. Avvia `db` con `podman compose up -d --wait db`. Per trasferire dati esistenti, ripristina il backup PostgreSQL nel database vuoto. Per ogni rilascio esegui `podman compose run --rm web python manage.py check --deploy` e `podman compose run --rm web python manage.py migrate --noinput`. Su un database nuovo completa l'importazione e la creazione dell'amministratore descritte sopra.
-5. Avvia la release con `podman compose up -d --no-build web`. Verifica l'accesso via HTTPS, i fogli di stile del portale e dell'amministrazione e l'apertura di una valutazione. I file statici sono già inclusi nell'immagine.
-
-## Avvio locale
-
-Servono Python 3.10 o successivo e PostgreSQL 14 o successivo. Imposta le variabili `PORTALE_DB_*` in `.env` con i parametri del tuo database.
+Costruisci l'immagine, avvia il pod e applica le migrazioni appena PostgreSQL è pronto. Su un nuovo database crea anche il primo amministratore.
 
 ```sh
-python3 -m venv .venv
-. .venv/bin/activate
-python -m pip install -r requirements.txt
-cp -n .env.example .env
-# Imposta i parametri di connessione in .env prima di proseguire.
-set -a
-. ./.env
-set +a
-python manage.py migrate
-python manage.py createsuperuser
-python manage.py runserver 127.0.0.1:8000
+podman build -t localhost/analisi-dei-pericoli:kube .
+podman kube play podman-kube.yml
+podman wait --condition=healthy analisi-pericoli-kube-db
+podman exec analisi-pericoli-kube-web python manage.py migrate --noinput
+podman exec -it analisi-pericoli-kube-web python manage.py createsuperuser
 ```
 
-Per importare il catalogo in un database nuovo esegui `python manage.py importa_catalogo /percorso/catalogo.xlsx`.
+Per importare il catalogo in un database nuovo, passa il foglio esterno al comando tramite lo standard input. Il file temporaneo viene rimosso al termine.
 
-Apri [il portale locale](http://127.0.0.1:8000/). L’operatore crea le aziende dal portale. L’amministratore crea gli utenti in `/amministrazione/` e assegna il gruppo **Operatore** oppure **Cliente**. Per il cliente seleziona anche l’azienda. Le password si impostano e si reimpostano dal pannello. Gli utenti con accesso possono cambiare la propria password dal menu utente.
+```sh
+podman exec -i analisi-pericoli-kube-web sh -ec '
+  file=$(mktemp --suffix=.xlsx)
+  trap "rm -f -- $file" EXIT
+  cat > "$file"
+  python manage.py importa_catalogo "$file"
+' < /percorso/catalogo.xlsx
+```
+
+Per arrestare il pod e conservare il database usa `podman kube down podman-kube.yml`. Dopo un aggiornamento ricostruisci l'immagine, esegui `podman kube play --replace podman-kube.yml`, attendi PostgreSQL e ripeti le migrazioni.
+
+## Utilizzo
+
+L’operatore crea le aziende dal portale. L’amministratore crea gli utenti in `/amministrazione/` e assegna il gruppo **Operatore** oppure **Cliente**. Per il cliente seleziona anche l’azienda. Le password si impostano e si reimpostano dal pannello. Gli utenti con accesso possono cambiare la propria password dal menu utente.
 
 La probabilità accetta la virgola o il punto come separatore decimale e conserva fino a 12 cifre decimali. La matrice mostra il risultato esatto e assegna la fascia al valore calcolato.
 
 ## Verifiche
 
-Con l’ambiente già attivato, esegui `python manage.py test --noinput`. Django crea e rimuove un database di test separato. Il ruolo PostgreSQL di sviluppo deve quindi poter creare database.
+Sul pod locale esegui la suite Django. Il comando crea e rimuove un database di test separato.
 
-Per un avvio su un’altra macchina configura una chiave segreta distinta con `PORTALE_SECRET_KEY`, gli host con `PORTALE_ALLOWED_HOSTS` e il database con `PORTALE_DB_*`. Usa HTTPS con `PORTALE_DEBUG` disattivato e raccogli i file statici con `python manage.py collectstatic`.
+```sh
+podman exec analisi-pericoli-kube-web python manage.py test --noinput
+```
+
+## Rilascio sulla VM
+
+1. Trasferisci l’immagine verificata con `podman save` e `podman load` oppure prelevala dal registro con `podman pull`. Nella copia di `podman-kube.yml` destinata alla VM indica il tag di release nel campo `image` del container `web`.
+2. Alla prima installazione crea il Secret sulla VM. Nelle variabili del container `web` imposta `PORTALE_DEBUG` a `"0"` e `PORTALE_ALLOWED_HOSTS` al nome DNS del portale.
+3. Configura il proxy HTTPS verso la porta loopback del pod, preservando l’header `Host`. Imposta `PORTALE_TRUST_PROXY_HTTPS=1` se controlli gli accessi al backend e il proxy sovrascrive `X-Forwarded-Proto` con lo schema della connessione originale.
+4. Avvia il pod, attendi PostgreSQL e applica le migrazioni come descritto sopra. Per trasferire dati esistenti, ripristina il backup nel database vuoto prima delle migrazioni. Esegui `podman exec analisi-pericoli-kube-web python manage.py check --deploy` e verifica l’accesso via HTTPS.
